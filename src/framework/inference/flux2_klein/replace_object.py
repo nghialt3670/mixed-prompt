@@ -2,6 +2,9 @@
 
 from __future__ import annotations
 
+from datetime import datetime
+from pathlib import Path
+
 import numpy as np
 from PIL import Image, ImageFilter, ImageOps
 
@@ -10,11 +13,10 @@ from .placement import GUIDE
 from .utils import (
     WORK_SIZE,
     binary_mask,
-    blend_edit,
     generate_klein_edit,
-    segment_added_object,
 )
 
+KLEIN_DEBUG_DIR = Path(".out/klein_debug")
 REPLACE_PROMPT = "Replace the object in the middle of the image with {prompt}. {guide} Add nothing else and preserve the surroundings."
 # The old object's area (grown by this fraction of its size) takes Klein's pixels.
 OLD_AREA_GROW = 0.04
@@ -29,6 +31,17 @@ def _old_area_weight(mask: Image.Image, crop_box) -> np.ndarray:
     return np.asarray(soft, np.float32) / 255.0
 
 
+def _save_klein_debug(model_input: Image.Image, model_output: Image.Image, prompt: str) -> Path:
+    """Write Klein's input, output, and prompt to a timestamped folder under .out/klein_debug."""
+    folder = KLEIN_DEBUG_DIR / datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+    folder.mkdir(parents=True, exist_ok=True)
+    model_input.save(folder / "klein_input.png")
+    model_output.save(folder / "klein_output.png")
+    (folder / "prompt.txt").write_text(prompt, encoding="utf-8")
+    print(f"[replace_object] klein debug saved to {folder}", flush=True)
+    return folder
+
+
 def flux2_klein_replace_object(
     pool: ModelPool,
     image: Image.Image,
@@ -38,11 +51,9 @@ def flux2_klein_replace_object(
     *,
     refine: bool = False,
 ) -> Image.Image:
-    """Replace the object at a white mask with ``prompt``, without removing it first.
+    """Replace the object at a white mask with ``prompt``.
 
-    Klein edits a crop around the mask and replaces the object directly. SAM3 and
-    the change map segment the new object, ViTMatte gives its alpha, and the old
-    object's footprint also takes Klein's pixels.
+    Klein's edit of the crop is pasted directly over the mask's soft footprint.
     """
     if not isinstance(image, Image.Image) or not isinstance(mask, Image.Image):
         raise TypeError("image and mask must both be PIL images")
@@ -66,35 +77,22 @@ def flux2_klein_replace_object(
     )
     original_crop = original.crop(crop_box)
     working_image = ImageOps.contain(original_crop, (WORK_SIZE, WORK_SIZE))
-    old_mask = binary_mask(mask.crop(crop_box))
 
+    full_prompt = REPLACE_PROMPT.format(prompt=prompt, guide=GUIDE)
     out = generate_klein_edit(
         pool.flux2_klein_pipeline,
         working_image,
-        REPLACE_PROMPT.format(prompt=prompt, guide=GUIDE),
+        full_prompt,
         inference_config,
     )
     if out.size != working_image.size:
         out = out.resize(working_image.size, Image.Resampling.LANCZOS)
+    _save_klein_debug(working_image, out, full_prompt)
     edited = out.resize(original_crop.size, Image.Resampling.LANCZOS)
-    object_mask = segment_added_object(
-        pool, original_crop, edited, old_mask, prompt, debug=debug
-    )
-    result, matte = blend_edit(
-        pool,
-        original,
-        crop_box,
-        edited,
-        object_mask,
-        harmonize=refine,
-        extra_weight=_old_area_weight(mask, crop_box),
-        debug=debug,
-    )
+    weight = _old_area_weight(mask, crop_box)
+    paste_mask = Image.fromarray((weight * 255).astype(np.uint8), "L")
+    full = original.copy()
+    full.paste(Image.composite(edited, original_crop, paste_mask), crop_box[:2])
     if debug is not None:
-        debug.update(
-            before=original_crop,
-            klein=edited,
-            matte=matte,
-            minimum=object_mask,
-        )
-    return result
+        debug.update(before=original_crop, klein=edited, weight=weight)
+    return full

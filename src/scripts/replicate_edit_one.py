@@ -32,7 +32,7 @@ MODELS = {
         "version": "7dd8def79e503990740db4704fa81af995d440fefe714958531d7044d2757c9c",
     },
     # Official endpoints do not accept pinning a community version in POST.
-    "flux_kontext": {"slug": "black-forest-labs/flux-kontext-dev", "version": None},
+    "flux_kontext": {"slug": "black-forest-labs/flux-kontext-pro", "version": None},
     "qwen_image_edit": {"slug": "qwen/qwen-image-edit", "version": None},
 }
 TERMINAL_STATUSES = ("succeeded", "failed", "canceled")

@@ -99,8 +99,9 @@
             employs LLM-based reasoning to generate executable editing programs, and integrates modular editing tools for
             controllable and compositional image manipulation. We further construct mixed-modality benchmark extensions and
             conduct comprehensive evaluations, including human studies and quantitative experiments. Experimental results
-            demonstrate roughly threefold faster prompt formulation, improved editing-intention fidelity, particularly in
-            challenging referential scenarios, and higher user satisfaction compared with text-only approaches.
+            show relative improvements of 14.4%–35.9% in VIEScore on Mixed-RefEdit and 8.2%–18.2% in EditScore on
+            Mixed-CompBench, reduce prompt length by about 54%, and enable roughly 3× faster prompting, with particularly
+            notable gains in complex multi-object scenes.
           </p>
         </div>
       </div>
@@ -133,29 +134,31 @@
         <h2 class="title is-3 has-text-centered">Method</h2>
         <div class="content has-text-justified">
           <p>
-            The architecture has three components: (1) Mixed-Modality Input, (2) Mixed-Modality Processor, and
-            (3) Reasoning and Execution Loop. Visual prompts are mapped to symbolic identifiers such as
-            <code>point_0</code>, <code>box_0</code>, or <code>scribble_0</code>. The LLM plans over the unified
-            textual instruction without receiving raw images, coordinates, or masks, while the execution engine
-            resolves each reference to its region when a tool is invoked.
+            The framework has three components: (1) Mixed-Prompt Input, (2) Visual Symbolic Mapping, and (3) Reasoning and
+            Execution Loop. Each visual prompt is assigned a symbolic identifier of the form <code>&lt;prompt type&gt;_&lt;id&gt;</code>,
+            such as <code>scribble_1</code>, <code>point_2</code>, or <code>box_3</code>, and stored in a symbol table that
+            maps each identifier to its visual prompt. The reasoning module is a text-only LLM that receives few-shot exemplars,
+            tool signatures, and the history of prior steps. It never receives raw images, coordinates, or masks. The execution
+            module resolves each identifier to its region when a tool is invoked, and returns an observation that is appended to
+            the history until the edit is complete.
           </p>
         </div>
         <figure>
-          <img src="./static/images/pipeline.webp" alt="Overall architecture of the Mixed-Prompt framework." loading="lazy">
+          <img src="./static/images/pipeline.webp" alt="Overall architecture of Mixed-Prompt." loading="lazy">
           <figcaption class="has-text-left">
-            Overall architecture of the proposed multimodal interactive image editing framework. The system transforms
-            multimodal user inputs into structured instructions, performs reasoning-based planning to generate executable
-            editing commands, and produces the final edited image through a modular execution pipeline with an interactive
-            feedback loop.
+            Overall architecture of Mixed-Prompt. A mixed-prompt input is converted by Visual Symbolic Mapping into a symbol
+            table and a unified text instruction. A Reasoning and Execution Loop alternates between reasoning, which produces a
+            thought and an action from the history, and execution, which runs the action with editing tools and returns an
+            observation, until the edited image is produced.
           </figcaption>
         </figure>
         <figure>
-          <img src="./static/images/edit_object_flow.webp" alt="Example of object-oriented local editing with the edit_object tool." loading="lazy">
+          <img src="./static/images/tool_flow.webp" alt="Example of object-oriented local editing with the edit_object tool." loading="lazy">
           <figcaption class="has-text-left">
             Example of object-oriented local editing using the <code>edit_object</code> tool. A user-specified visual reference
-            is resolved to the target object, which is segmented and cropped for localized editing. The result is refined,
-            harmonized, and composited back into the original image. The implementation combines SAM 3, FLUX.2 Klein 4B,
-            VitMatte, PtcNet, and Python Pillow.
+            is resolved to the target object, which is segmented and cropped for localized editing. The resulting content undergoes
+            mask refinement and harmonization before being composited back into the original image. The implementation combines
+            SAM 3, FLUX.2 Klein 4B, VitMatte, PtcNet, and Python Pillow.
           </figcaption>
         </figure>
       </div>
@@ -170,18 +173,18 @@
         <h2 class="title is-3 has-text-centered">Datasets</h2>
         <div class="content has-text-justified">
           <p>
-            We evaluate on four datasets: two human-evaluation datasets, <b>Mixed-Eval</b> (50 images, 30 instructions) and
-            <b>Mixed-Interact</b> (60 images, 45 tasks), and two mixed-modality extensions of existing benchmarks,
-            <b>Mixed-RefEdit</b> (200 instructions, from RefEdit) and <b>Mixed-CompBench</b> (2609 instructions, from CompBench).
-            Each instruction has paired text-only and mixed-modality forms.
+            We construct a human-evaluation collection and extend two existing benchmarks with visual references. For
+            editing-outcome evaluation, 36 images and 30 editing instructions are used. For interaction evaluation, 52 images
+            and 45 editing tasks are used, and each task is completed by three participants under both conditions, giving 270
+            sessions. <b>Mixed-RefEdit</b> extends RefEdit (Easy and Hard cases), and <b>Mixed-CompBench</b> extends CompBench
+            (Local and Multi-object). Each instruction has paired text-only and mixed-modality forms.
           </p>
         </div>
         <figure>
-          <img src="./static/images/dataset.webp" alt="Representative examples from Mixed-Eval and Mixed-Interact." loading="lazy">
+          <img src="./static/images/dataset.webp" alt="Examples from the human-evaluation data." loading="lazy">
           <figcaption class="has-text-left">
-            Representative examples from Mixed-Eval and Mixed-Interact. Mixed-Eval provides paired text-only and mixed-modality
-            instructions for evaluating editing outcomes, while Mixed-Interact includes editing objectives for assessing
-            interactive prompt formulation.
+            Examples from the human-evaluation data. Editing-outcome evaluation uses paired text-only and mixed-modality
+            instructions. Interaction evaluation uses input images and target edited results to define editing objectives.
           </figcaption>
         </figure>
         <figure>
@@ -213,9 +216,11 @@
         <h2 class="title is-3 has-text-centered">Referential Editing (Mixed-RefEdit)</h2>
         <div class="content has-text-justified">
           <p>
-            Ours--Mixed outperforms Ours--Text on all three metrics in both difficulty categories. On Hard cases,
-            semantic consistency ($SC_{\mathrm{avg}}$) rises from 6.92 to 7.77, and the drop from Easy to Hard shrinks
-            from 0.93 to 0.10 points.
+            Ours--Mixed achieves the highest semantic consistency and overall scores in both difficulty levels. On Hard cases,
+            it improves the overall score by 35.9% over RefEdit-SD3 and by 14.4% over Ours--Text. Ours--Text loses 0.93 points
+            in semantic consistency from Easy to Hard, whereas Ours--Mixed loses only 0.10 points. Ours--Mixed does not
+            outperform all competing methods in perceptual quality, since target identification and visual quality depend on
+            different factors.
           </p>
         </div>
         <div class="table-container">
@@ -258,10 +263,10 @@
         <h2 class="title is-3 has-text-centered">Compositional Editing (Mixed-CompBench)</h2>
         <div class="content has-text-justified">
           <p>
-            Compared with Ours--Text, Ours--Mixed improves Preference Fidelity (PF) from 8.12 to 9.16, Consistency from 8.71
-            to 9.11, Perceptual Quality (PQ) from 6.41 to 7.10, and Overall from 6.74 to 7.70 (a 14.2% relative gain).
-            Local CLIP Text Score ($LC\text{-}T$) is slightly higher than Ours--Text but below FLUX.1 Kontext, which
-            reflects a known limitation of CLIP-based similarity for multi-object edits.
+            Ours--Mixed achieves the highest LC-T, PF, PQ, and Overall scores. Compared with Ours--Text, it improves LC-T by
+            1.47 points and PF by 0.80 points, and raises the Overall score by about 8.3%. Its Overall score of 7.70 exceeds
+            the strongest external baseline, FLUX.1 Kontext (6.51), by about 18.3%. Ours--Text reaches a slightly higher
+            Consistency score (9.44 vs. 9.11), which may reflect differences in the underlying generative backends.
           </p>
         </div>
         <div class="table-container">
@@ -275,10 +280,10 @@
             <tbody>
               <tr><td>Step1X-Edit</td><td>20.459</td><td>6.28</td><td>7.94</td><td>5.43</td><td>5.05</td></tr>
               <tr><td>BAGEL</td><td>20.856</td><td>8.06</td><td>8.80</td><td>5.94</td><td>6.24</td></tr>
-              <tr><td>FLUX.1 Kontext</td><td><b>21.020</b></td><td>8.24</td><td>8.62</td><td>6.16</td><td>6.51</td></tr>
+              <tr><td>FLUX.1 Kontext</td><td>21.020</td><td>8.24</td><td>8.62</td><td>6.16</td><td>6.51</td></tr>
               <tr><td>Qwen-Image-Edit</td><td>20.722</td><td>8.50</td><td>8.32</td><td>6.01</td><td>6.39</td></tr>
-              <tr class="is-selected"><td>Ours--Text</td><td>20.050</td><td>8.12</td><td>8.71</td><td>6.41</td><td>6.74</td></tr>
-              <tr class="is-selected"><td><b>Ours--Mixed</b></td><td>20.240</td><td><b>9.16</b></td><td><b>9.11</b></td><td><b>7.10</b></td><td><b>7.70</b></td></tr>
+              <tr class="is-selected"><td>Ours--Text</td><td>20.1</td><td>8.36</td><td><b>9.44</b></td><td>7.04</td><td>7.11</td></tr>
+              <tr class="is-selected"><td><b>Ours--Mixed</b></td><td><b>21.57</b></td><td><b>9.16</b></td><td>9.11</td><td>7.09</td><td><b>7.70</b></td></tr>
             </tbody>
           </table>
         </div>
@@ -294,20 +299,126 @@
 
     <div class="columns is-centered">
       <div class="column is-four-fifths">
-        <h2 class="title is-3 has-text-centered">User Study</h2>
+        <h2 class="title is-3 has-text-centered">Editing Locality and Background Preservation</h2>
         <div class="content has-text-justified">
           <p>
-            In the Mixed-Interact study, participants formulated equivalent editing intentions under text-only and
-            mixed-modality conditions. Mixed-modality prompting reduced prompt formulation time by roughly threefold and
-            received higher satisfaction ratings.
+            Evaluated on the Local and Multi-object categories of Mixed-CompBench using the CompBench protocol and the
+            background-preservation metrics SSIM, PSNR, and LPIPS. Ours--Mixed outperforms Ours--Text on all metrics in both
+            categories. On Local tasks, PSNR increases by 4.44 dB and LPIPS decreases by about 73.8%. Compared with the
+            strongest external baseline on Multi-object tasks, PSNR increases by about 4.96 dB over BAGEL, and LPIPS decreases
+            by about 54.2% relative to FLUX.1 Kontext.
+          </p>
+        </div>
+        <div class="table-container">
+          <table class="table is-bordered is-striped is-hoverable is-fullwidth is-size-7">
+            <thead>
+              <tr>
+                <th rowspan="2">Method</th>
+                <th colspan="3" class="has-text-centered">Local</th>
+                <th colspan="3" class="has-text-centered">Multi-object</th>
+              </tr>
+              <tr>
+                <th>SSIM &uarr;</th><th>PSNR &uarr;</th><th>LPIPS &darr;</th>
+                <th>SSIM &uarr;</th><th>PSNR &uarr;</th><th>LPIPS &darr;</th>
+              </tr>
+            </thead>
+            <tbody>
+              <tr><td>InstructPix2Pix</td><td>0.706</td><td>21.828</td><td>0.124</td><td>0.671</td><td>20.534</td><td>0.152</td></tr>
+              <tr><td>MagicBrush</td><td>0.741</td><td>23.429</td><td>0.090</td><td>0.738</td><td>24.176</td><td>0.081</td></tr>
+              <tr><td>HIVE</td><td>0.641</td><td>19.903</td><td>0.198</td><td>0.624</td><td>19.896</td><td>0.210</td></tr>
+              <tr><td>SmartEdit-7B</td><td>0.761</td><td>24.389</td><td>0.074</td><td>0.745</td><td>24.886</td><td>0.076</td></tr>
+              <tr><td>MGIE</td><td>0.639</td><td>18.204</td><td>0.257</td><td>0.500</td><td>15.380</td><td>0.354</td></tr>
+              <tr><td>CosXL-Edit</td><td>0.712</td><td>20.809</td><td>0.148</td><td>0.698</td><td>21.068</td><td>0.153</td></tr>
+              <tr><td>HQ-Edit</td><td>0.411</td><td>11.768</td><td>0.428</td><td>0.432</td><td>13.032</td><td>0.400</td></tr>
+              <tr><td>UltraEdit</td><td>0.741</td><td>22.932</td><td>0.143</td><td>0.732</td><td>22.725</td><td>0.152</td></tr>
+              <tr><td>AnyEdit</td><td>0.716</td><td>22.812</td><td>0.124</td><td>0.710</td><td>23.493</td><td>0.116</td></tr>
+              <tr><td>GoT</td><td>0.889</td><td>24.675</td><td>0.067</td><td>0.842</td><td>22.486</td><td>0.108</td></tr>
+              <tr><td>Step1X-Edit</td><td>0.882</td><td>23.372</td><td>0.078</td><td>0.886</td><td>23.782</td><td>0.078</td></tr>
+              <tr><td>BAGEL</td><td>0.935</td><td>27.692</td><td>0.045</td><td>0.932</td><td>26.849</td><td>0.051</td></tr>
+              <tr><td>FLUX.1 Kontext</td><td>0.941</td><td>25.613</td><td>0.050</td><td>0.952</td><td>26.278</td><td>0.048</td></tr>
+              <tr><td>Qwen-Image-Edit</td><td>0.892</td><td>24.968</td><td>0.072</td><td>0.826</td><td>23.492</td><td>0.103</td></tr>
+              <tr class="is-selected"><td>Ours--Text</td><td>0.949</td><td>30.479</td><td>0.042</td><td>0.961</td><td>30.046</td><td>0.024</td></tr>
+              <tr class="is-selected"><td><b>Ours--Mixed</b></td><td><b>0.983</b></td><td><b>34.920</b></td><td><b>0.011</b></td><td><b>0.973</b></td><td><b>31.81</b></td><td><b>0.022</b></td></tr>
+            </tbody>
+          </table>
+        </div>
+
+        <h2 class="title is-3 has-text-centered">Human Interaction Study</h2>
+        <div class="content has-text-justified">
+          <p>
+            Two studies compare text-only prompting with ChatGPT-4 against the mixed-modality system. Stage 1 evaluates
+            editing-intention fidelity and user preference with 20 human evaluators (aged 19–40) based on generated editing
+            results. Stage 2 evaluates prompting time, result satisfaction, and interaction comfort during direct interaction
+            with 15 participants. Both conditions differ in prompting interface and underlying editing architecture, so the
+            comparison assesses the complete systems rather than visual prompting alone.
+          </p>
+        </div>
+        <h3 class="title is-5">Stage 1: Editing-Intention Fidelity and User Preference</h3>
+        <div class="table-container">
+          <table class="table is-bordered is-striped is-hoverable is-fullwidth">
+            <thead>
+              <tr><th>Evaluation Metric</th><th>Text-only</th><th>Mixed-Prompt</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>Editing Intention Accuracy (%)</td><td>79.23</td><td><b>98.67</b></td></tr>
+              <tr><td>Output Satisfaction (1–5)</td><td>3.20</td><td><b>4.85</b></td></tr>
+              <tr><td>User Preference Rate (%)</td><td>15</td><td><b>85</b></td></tr>
+            </tbody>
+          </table>
+        </div>
+        <h3 class="title is-5">Stage 2: Prompting Efficiency</h3>
+        <div class="table-container">
+          <table class="table is-bordered is-striped is-hoverable is-fullwidth is-size-7">
+            <thead>
+              <tr><th>Category</th><th>Setting</th><th>Text-only (s)</th><th>Mixed-Prompt (s)</th></tr>
+            </thead>
+            <tbody>
+              <tr><td rowspan="3">Task Complexity</td><td>1 task</td><td>24.3</td><td>8.17</td></tr>
+              <tr><td>2 tasks</td><td>20.25</td><td>9.48</td></tr>
+              <tr><td>3 tasks</td><td>44.76</td><td>9.45</td></tr>
+              <tr><td rowspan="2">Scene Complexity</td><td>Single-object</td><td>20.87</td><td>9.47</td></tr>
+              <tr><td>Multi-object</td><td>35.9</td><td>8.72</td></tr>
+              <tr><td rowspan="4">Editing Operation</td><td>Object Removal</td><td>37.86</td><td>9.97</td></tr>
+              <tr><td>Object Addition</td><td>23.58</td><td>9.95</td></tr>
+              <tr><td>Object Replacement</td><td>21.93</td><td>8.69</td></tr>
+              <tr><td>Object Transformation</td><td>23.94</td><td>8.03</td></tr>
+            </tbody>
+          </table>
+        </div>
+        <div class="content has-text-justified">
+          <p>
+            Averaged across the nine settings, prompting time decreases from 28.15 to 9.10 seconds, a 3.1-fold improvement
+            (67.7% reduction). Result Satisfaction rises from 2.92 to 4.04, and Interaction Comfort rises from 2.82 to 4.68.
           </p>
         </div>
         <figure>
-          <img src="./static/images/user_satisfaction.webp" alt="Stage 1 user study results." loading="lazy">
+          <img src="./static/images/user_satisfaction.webp" alt="Stage 2 user evaluation of result satisfaction and interaction comfort." loading="lazy">
           <figcaption class="has-text-left">
-            Stage 1 human evaluation of editing-intention fidelity, output satisfaction, and user preference.
+            Stage 2 user evaluation of result satisfaction and interaction comfort on five-point rating scales.
           </figcaption>
         </figure>
+
+        <h3 class="title is-5">Linguistic Specification Burden</h3>
+        <div class="content has-text-justified">
+          <p>
+            Instruction length is measured in words for text-only instructions and in representational units for mixed-modality
+            instructions, where each symbolic visual reference counts as one unit. Mixed-modality prompting reduces instruction
+            length by about 54% across the evaluated benchmarks.
+          </p>
+        </div>
+        <div class="table-container">
+          <table class="table is-bordered is-striped is-hoverable is-fullwidth is-size-7">
+            <thead>
+              <tr><th>Benchmark</th><th>Original Words</th><th>Mixed Units</th><th>Units Removed</th><th>Reduction</th></tr>
+            </thead>
+            <tbody>
+              <tr><td>RefEdit Easy</td><td>11.82</td><td>4.89</td><td>6.93</td><td>58.63%</td></tr>
+              <tr><td>RefEdit Hard</td><td>13.14</td><td>4.78</td><td>8.36</td><td>63.62%</td></tr>
+              <tr><td>CompBench Local</td><td>9.97</td><td>4.66</td><td>5.31</td><td>53.26%</td></tr>
+              <tr><td>CompBench Multi-object</td><td>13.42</td><td>5.89</td><td>7.53</td><td>56.11%</td></tr>
+            </tbody>
+          </table>
+        </div>
       </div>
     </div>
   </div>

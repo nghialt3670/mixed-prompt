@@ -40,7 +40,7 @@ def _generate_klein_edit(
 
 
 # Shared settings for distilled FLUX.2 Klein 4B.
-PADDING_FRAC = 0.60
+PADDING_FRAC = 0.2
 WORK_SIZE = 1024
 EDGE_BLEND_PX = 12
 
@@ -79,6 +79,8 @@ def flux2_klein_add_object_with_box(
     image: Image.Image,
     box: Sequence[float],
     prompt: str,
+    *,
+    instruction: str | None = None,
 ) -> Image.Image:
     """Add an object near an XYXY pixel box and paste the entire edited crop."""
     if not isinstance(image, Image.Image):
@@ -114,7 +116,7 @@ def flux2_klein_add_object_with_box(
         edited = (
             pool.flux2_klein_pipeline(
                 image=cropped.resize((ww, wh), Image.Resampling.LANCZOS),
-                prompt=f"Add {prompt} to the center.",
+                prompt=instruction or f"Add {prompt} to the center.",
                 height=wh,
                 width=ww,
                 num_inference_steps=inference_config.num_inference_steps,
@@ -126,7 +128,7 @@ def flux2_klein_add_object_with_box(
         )
 
     if edited.size != (ww, wh):
-        raise ValueError(f"Klein returned {edited.size}, expected {(ww, wh)}")
+        edited = edited.resize((ww, wh), Image.Resampling.LANCZOS)
 
     blended = Image.composite(
         edited.resize((cw, ch), Image.Resampling.LANCZOS),
@@ -186,7 +188,7 @@ def flux2_klein_add_object_with_mask(
         inference_config,
     )
     if edited.size != working_image.size:
-        raise ValueError(f"Klein returned {edited.size}, expected {working_image.size}")
+        edited = edited.resize(working_image.size, Image.Resampling.LANCZOS)
 
     crop_mask = mask.crop(crop_box)
     edited_crop = edited.resize(original_crop.size, Image.Resampling.LANCZOS)

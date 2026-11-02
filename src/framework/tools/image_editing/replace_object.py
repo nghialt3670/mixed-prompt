@@ -4,7 +4,7 @@ from PIL import Image
 
 from framework.inference import (
     flux2_klein_remove_object,
-    flux2_klein_replace_object,
+    flux2_klein_replace_object_two_stage,
 )
 
 from ..context import ToolContext
@@ -63,7 +63,7 @@ def replace_object(
 ) -> Image.Image:
     bounds = _validate_replace_object_args(image, mask, replacement, prompt)
     if prompt is not None:
-        return flux2_klein_replace_object(ctx.model_pool, image, mask, prompt)
+        return flux2_klein_replace_object_two_stage(ctx.model_pool, image, mask, prompt)
 
     clean = flux2_klein_remove_object(ctx.model_pool, image, mask)
     if replacement is None:

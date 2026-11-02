@@ -12,6 +12,7 @@ from .flux2_klein import (
     flux2_klein_edit_object,
     flux2_klein_remove_object,
     flux2_klein_replace_object,
+    flux2_klein_replace_object_two_stage,
 )
 from .mice import mice_add_object_with_box
 from .object_clear import object_clear_remove_object
@@ -34,6 +35,7 @@ __all__ = [
     "flux2_klein_edit_object",
     "flux2_klein_remove_object",
     "flux2_klein_replace_object",
+    "flux2_klein_replace_object_two_stage",
     "mice_add_object_with_box",
     "object_clear_remove_object",
     "qwen_locate_region",

@@ -139,6 +139,7 @@ class Runtime:
     def __init__(self, output_root: Path, max_steps: int) -> None:
         from evaluation.common import AGENT_EXECUTION_TIMEOUT_SECONDS
         from evaluation.notebook import create_agent_model
+        from framework.inference import ModelPool
         from framework.tools import image_editing_tools
         from framework.utils.project import load_project_environment
 
@@ -148,7 +149,8 @@ class Runtime:
         self.timeout = AGENT_EXECUTION_TIMEOUT_SECONDS
         print("Loading agent model and inference tools...")
         self.model = create_agent_model()
-        self.tools = image_editing_tools()
+        self.pool = ModelPool()
+        self.tools = image_editing_tools(self.pool)
         print("Agent ready.")
 
     def run(
@@ -253,6 +255,30 @@ class Runtime:
         }
 
 
+    def segment(self, image: Image.Image, prompt: dict[str, Any]) -> Image.Image:
+        from framework.inference import sam3_segment_mask
+
+        kind, value = prompt["type"], prompt["value"]
+        if kind == "point":
+            x, y = value
+            return sam3_segment_mask(self.pool, image, points=[{"x": x, "y": y, "label": 1}])
+        if kind == "box":
+            return sam3_segment_mask(self.pool, image, box=value)
+        stride = max(1, len(value) // 10)
+        points = [{"x": x, "y": y, "label": 1} for x, y in value[::stride][:10]]
+        return sam3_segment_mask(self.pool, image, points=points)
+
+    def save_segment(self, image: Image.Image, prompt: dict[str, Any], mask: Image.Image) -> Path:
+        run_dir = self.output_root / datetime.now().strftime("%Y%m%d_%H%M%S_%f")
+        run_dir.mkdir(parents=True, exist_ok=True)
+        image.save(run_dir / "source.png")
+        mask.save(run_dir / "mask.png")
+        (run_dir / "segment.json").write_text(
+            json.dumps({"prompt": prompt}, ensure_ascii=False, indent=2), encoding="utf-8"
+        )
+        return run_dir
+
+
 class App:
     def __init__(self, runtime: Runtime, image: Image.Image | None) -> None:
         self.runtime = runtime
@@ -281,6 +307,8 @@ class Handler(BaseHTTPRequestHandler):
             self._upload(body)
         elif self.path == "/run":
             self._run(body)
+        elif self.path == "/segment":
+            self._segment(body)
         else:
             self._send(404, "text/plain; charset=utf-8", b"Not found")
 
@@ -308,6 +336,30 @@ class Handler(BaseHTTPRequestHandler):
         with app.lock:
             result = app.runtime.run(app.image, instruction, prompts)
         self._json(200 if result["ok"] else 500, result)
+
+    def _segment(self, body: bytes) -> None:
+        app = self.server.app
+        if app.image is None:
+            self._json(400, {"ok": False, "error": "Upload an image first."})
+            return
+        try:
+            payload = json.loads(body or b"{}")
+            kind = payload.get("type")
+            if kind not in PROMPT_TYPES:
+                raise ValueError("Unknown prompt type.")
+            value = _prompt_value(kind, payload.get("value"), app.image.size)
+        except (ValueError, TypeError, json.JSONDecodeError) as exc:
+            self._json(400, {"ok": False, "error": str(exc)})
+            return
+        prompt = {"type": kind, "value": value}
+        with app.lock:
+            try:
+                mask = app.runtime.segment(app.image, prompt)
+                run_dir = app.runtime.save_segment(app.image, prompt, mask)
+            except Exception as exc:
+                self._json(500, {"ok": False, "error": f"{type(exc).__name__}: {exc}"})
+                return
+        self._json(200, {"ok": True, "mask_png": _png_base64(mask), "run_dir": str(run_dir)})
 
     def _json(self, status: int, data: dict[str, Any]) -> None:
         self._send(status, "application/json; charset=utf-8", json.dumps(data).encode("utf-8"))
@@ -390,6 +442,7 @@ pre { background: #f6f6f6; padding: 8px; max-height: 360px; overflow: auto; whit
     <textarea id="instruction" placeholder="e.g. Remove <point_0>"></textarea>
     <ul id="prompts"></ul>
     <div id="checks" class="warn"></div>
+    <button id="segment">Segment selected prompt</button>
     <button id="run">Run</button>
     <button id="reset">Reset</button>
     <span id="status" class="muted"></span>
@@ -414,6 +467,9 @@ let prompts = [];
 let tool = "point";
 let draft = null;
 let timer = null;
+let selectedToken = null;
+let maskCanvas = null;
+const segmentBtn = document.getElementById("segment");
 
 canvas.style.touchAction = "none";
 
@@ -491,6 +547,7 @@ function draftAsPrompt() {
 function redraw() {
   ctx.clearRect(0, 0, canvas.width, canvas.height);
   if (imageLoaded) ctx.drawImage(img, 0, 0);
+  if (maskCanvas) ctx.drawImage(maskCanvas, 0, 0);
   const lw = Math.max(2, canvas.width / 256);
   prompts.forEach((p) => drawPrompt(p, lw, false));
   if (draft) drawPrompt(draftAsPrompt(), lw, true);
@@ -560,6 +617,12 @@ function renderPrompts() {
     const desc = document.createElement("span");
     desc.className = "muted";
     desc.textContent = " " + summary(p);
+    desc.style.cursor = "pointer";
+    desc.style.fontWeight = p === currentPrompt() ? "bold" : "normal";
+    desc.onclick = () => {
+      selectedToken = p.token;
+      renderPrompts();
+    };
     const del = document.createElement("button");
     del.textContent = "x";
     del.onclick = () => removePrompt(i);
@@ -591,6 +654,7 @@ function addPrompt(type, value) {
 function removePrompt(i) {
   const { token } = prompts[i];
   prompts.splice(i, 1);
+  if (selectedToken === token) selectedToken = null;
   ta.value = ta.value.replace(new RegExp(`\\s*<${token}>`, "g"), "").trim();
   refresh();
 }
@@ -686,9 +750,69 @@ async function run() {
   showResult(data);
 }
 
+function currentPrompt() {
+  return prompts.find((p) => p.token === selectedToken) || prompts[prompts.length - 1] || null;
+}
+
+function tintMask(b64) {
+  return new Promise((resolve) => {
+    const m = new Image();
+    m.onload = () => {
+      const c = document.createElement("canvas");
+      c.width = m.naturalWidth;
+      c.height = m.naturalHeight;
+      const cx = c.getContext("2d");
+      cx.drawImage(m, 0, 0);
+      const data = cx.getImageData(0, 0, c.width, c.height);
+      for (let i = 0; i < data.data.length; i += 4) {
+        const on = data.data[i];
+        data.data[i] = 0;
+        data.data[i + 1] = 255;
+        data.data[i + 2] = 160;
+        data.data[i + 3] = on ? 110 : 0;
+      }
+      cx.putImageData(data, 0, 0);
+      resolve(c);
+    };
+    m.src = "data:image/png;base64," + b64;
+  });
+}
+
+async function segmentCurrent() {
+  errorBox.textContent = "";
+  const p = currentPrompt();
+  if (!p) {
+    errorBox.textContent = "Add a point, box, or scribble first.";
+    return;
+  }
+  segmentBtn.disabled = true;
+  statusBox.textContent = "Segmenting...";
+  let data;
+  try {
+    const r = await fetch("/segment", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({ type: p.type, value: p.value }),
+    });
+    data = await r.json();
+  } catch (err) {
+    data = { ok: false, error: String(err) };
+  }
+  segmentBtn.disabled = false;
+  statusBox.textContent = "";
+  if (!data.ok) {
+    errorBox.textContent = data.error;
+    return;
+  }
+  maskCanvas = await tintMask(data.mask_png);
+  redraw();
+}
+
 function reset() {
   prompts = [];
   draft = null;
+  selectedToken = null;
+  maskCanvas = null;
   ta.value = "";
   errorBox.textContent = "";
   resultBox.innerHTML = "";
@@ -723,6 +847,7 @@ document.getElementById("file").onchange = async (e) => {
 
 ta.addEventListener("input", checkPlaceholders);
 runBtn.onclick = run;
+segmentBtn.onclick = segmentCurrent;
 document.getElementById("reset").onclick = reset;
 renderPrompts();
 loadImage();

@@ -7,6 +7,7 @@ from .add_object import (
 from .edit_object import flux2_klein_edit_object
 from .remove_object import flux2_klein_remove_object
 from .replace_object import flux2_klein_replace_object
+from .replace_two_stage import flux2_klein_replace_object_two_stage
 
 __all__ = [
     "flux2_klein_add_object_with_box",
@@ -14,4 +15,5 @@ __all__ = [
     "flux2_klein_edit_object",
     "flux2_klein_remove_object",
     "flux2_klein_replace_object",
+    "flux2_klein_replace_object_two_stage",
 ]
