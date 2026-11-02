@@ -123,9 +123,8 @@
         <figure>
           <img src="./static/images/inputoutput.webp" alt="Overview of Mixed-Prompt for compositional image editing." loading="lazy">
           <figcaption class="has-text-left">
-            Overview of Mixed-Prompt for compositional image editing. By combining natural language instructions with visual
-            references, including points, bounding boxes, and scribbles, users can explicitly specify editing targets and
-            perform different editing operations.
+            Input--output examples of Mixed-Prompt illustrating different image editing operations: object addition, removal,
+            replacement, and modification.
           </figcaption>
         </figure>
       </div>
@@ -140,7 +139,7 @@
         <h2 class="title is-3 has-text-centered">Method</h2>
         <div class="content has-text-justified">
           <p>
-            The framework has three components: (1) Mixed-Prompt Input, (2) Visual Symbolic Mapping, and (3) Reasoning and
+            The Mixed-Prompt Edit framework has three components: (1) Mixed-Prompt Input, (2) Visual Symbolic Mapping, and (3) Reasoning and
             Execution Loop. Each visual prompt is assigned a symbolic identifier of the form <code>&lt;prompt type&gt;_&lt;id&gt;</code>,
             such as <code>scribble_1</code>, <code>point_2</code>, or <code>box_3</code>, and stored in a symbol table that
             maps each identifier to its visual prompt. The reasoning module is a text-only LLM that receives few-shot exemplars,
@@ -150,9 +149,9 @@
           </p>
         </div>
         <figure>
-          <img src="./static/images/pipeline.webp" alt="Overall architecture of Mixed-Prompt." loading="lazy">
+          <img src="./static/images/pipeline.webp" alt="Overall architecture of Mixed-Prompt Edit." loading="lazy">
           <figcaption class="has-text-left">
-            Overall architecture of Mixed-Prompt. A mixed-prompt input is converted by Visual Symbolic Mapping into a symbol
+            Overall architecture of Mixed-Prompt Edit. A mixed-prompt input is converted by Visual Symbolic Mapping into a symbol
             table and a unified text instruction. A Reasoning and Execution Loop alternates between reasoning, which produces a
             thought and an action from the history, and execution, which runs the action with editing tools and returns an
             observation, until the edited image is produced.
@@ -164,9 +163,26 @@
             Example of object-oriented local editing using the <code>edit_object</code> tool. A user-specified visual reference
             is resolved to the target object, which is segmented and cropped for localized editing. The resulting content undergoes
             mask refinement and harmonization before being composited back into the original image. The implementation combines
-            SAM 3, FLUX.2 Klein 4B, VitMatte, PtcNet, and Python Pillow.
+            SAM3, FLUX.2 Klein 4B, VitMatte, PtcNet, and Python Pillow.
           </figcaption>
         </figure>
+        <div class="content has-text-justified">
+          <p>
+            <b>Mixed-Modality Compositional Editing.</b> Multiple visual references and editing operations can be combined in a
+            single instruction. For example, "Remove &lt;point&gt;, add a cat at &lt;box&gt;, and enlarge &lt;scribble&gt; by 20%"
+            is unified into symbols such as <code>point_1</code>, <code>box_2</code>, and <code>scribble_3</code>. Each symbol is
+            resolved to its own mask, and the resulting commands may run together or across successive loop steps.
+          </p>
+          <p>
+            <b>Feedback-Driven Execution Error Recovery.</b> The observation from every executed action is appended to the history.
+            Failed actions, such as invalid tool calls or missing parameters, are corrected in the next step. The feedback does not
+            detect incorrect object selection or unsatisfactory image quality.
+          </p>
+          <p>
+            <b>Modular Extensibility.</b> Each editing operation is exposed through a standardized tool interface, so an editing
+            backend can be replaced or extended without changing the prompt unification and planning structure.
+          </p>
+        </div>
       </div>
     </div>
   </div>
@@ -176,7 +192,7 @@
   <div class="container is-max-desktop">
     <div class="columns is-centered">
       <div class="column is-four-fifths">
-        <h2 class="title is-3 has-text-centered">Datasets</h2>
+        <h2 class="title is-3 has-text-centered">Benchmarks</h2>
         <div class="content has-text-justified">
           <p>
             We construct a human-evaluation collection and extend two existing benchmarks with visual references. For
@@ -193,15 +209,16 @@
         <figure>
           <img src="./static/images/dataset.webp" alt="Examples from the human-evaluation data." loading="lazy">
           <figcaption class="has-text-left">
-            Examples from the human-evaluation data. Editing-outcome evaluation uses paired text-only and mixed-modality
-            instructions. Interaction evaluation uses input images and target edited results to define editing objectives.
+            Examples from the human-evaluation data. Left: Editing-outcome evaluation uses paired text-only and mixed-modality
+            instructions. Right: Interaction evaluation uses input images and target edited results to define editing objectives.
           </figcaption>
         </figure>
         <figure>
-          <img src="./static/images/dataset_distribution.webp" alt="Distribution of dataset characteristics and task complexity." loading="lazy">
+          <img src="./static/images/dataset_distribution.webp" alt="Distribution of benchmark characteristics and task complexity." loading="lazy">
           <figcaption class="has-text-left">
-            Distribution of dataset characteristics and editing task complexity. The distribution includes 47.1% single-object
-            and 52.9% multi-object cases.
+            Distribution of image characteristics and editing task complexity. Top-left: Image complexity in terms of object types,
+            object sizes, and scene configurations. Bottom-left: Editing instruction complexity based on the number of operations
+            and target objects. Right: Some images illustrating the diversity of the evaluation data.
           </figcaption>
         </figure>
         <figure>
@@ -209,13 +226,15 @@
           <figcaption class="has-text-left">
             Mixed-modality annotation pipeline. Text-based instructions are converted into paired mixed-modality instructions
             through referring-expression identification, mask-guided grounding, instruction rewriting, and visual prompt
-            synthesis.
+            synthesis using points, bounding boxes, and scribbles.
           </figcaption>
         </figure>
         <figure>
           <img src="./static/images/annotation_results.webp" alt="Representative annotation examples from RefEdit and CompBench." loading="lazy">
           <figcaption class="has-text-left">
-            Representative annotation examples from RefEdit (Easy and Hard) and CompBench (Local and Multi-object).
+            Representative annotation examples from RefEdit (Easy and Hard) and CompBench (Local and Multi-object), illustrating
+            how explicit visual references replace lengthy or ambiguous textual descriptions while preserving the original editing
+            objectives.
           </figcaption>
         </figure>
       </div>
